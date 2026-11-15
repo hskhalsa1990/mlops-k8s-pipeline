@@ -1,0 +1,9 @@
+# Render with: kubectl kustomize .
+# Only the files listed here are applied; k8s-optional-*.yaml are applied by hand.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- k8s-deployment.yaml
+- k8s-hpa.yaml
+- k8s-pdb.yaml
+- k8s-networkpolicy.yaml

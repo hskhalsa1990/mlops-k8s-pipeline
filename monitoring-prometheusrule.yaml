@@ -1,0 +1,79 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ml-api-alerts
+spec:
+  groups:
+  - name: ml-api
+    rules:
+    - alert: MLApiDown
+      expr: up{service="ml-api-service"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "ML API target is down"
+    - alert: MLModelNotLoaded
+      expr: ml_model_loaded == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "Pod {{ $labels.pod }} is running without a model"
+    - alert: MLApiHighLatency
+      expr: histogram_quantile(0.95, sum(rate(predict_latency_seconds_bucket[5m])) by (le)) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "p95 prediction latency above 500ms"
+    - alert: MLApiHighErrorRate
+      expr: |
+        sum(rate(http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "More than 5% of API requests are failing with 5xx"
+    - alert: MLConfidenceDrift
+      expr: histogram_quantile(0.5, sum(rate(predict_confidence_bucket[1h])) by (le)) < 0.5
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "Median prediction confidence is low; inputs may have drifted, consider retraining"
+    - alert: MLInputDrift
+      expr: histogram_quantile(0.5, sum(rate(predict_input_zscore_mean_abs_bucket[1h])) by (le)) > 1.5
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "Median input z-score is high; live data has shifted from the training data"
+    - alert: MLNoTraffic
+      expr: sum(rate(predict_requests_total[30m])) == 0
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "No prediction requests for an hour"
+    - alert: MLApiErrorBudgetFastBurn
+      expr: |
+        (
+          sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.14
+        and
+          sum(rate(http_requests_total{status=~"5.."}[1h])) / sum(rate(http_requests_total[1h])) > 0.14
+        )
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        runbook_url: "https://github.com/hskhalsa1990/mlops-k8s-pipeline/blob/main/RUNBOOK.md"
+        summary: "Burning the 99.5% availability error budget about 28x too fast (see RUNBOOK.md)"

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommitTypeAll(chore)"],
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "vulnerabilityAlerts": {"labels": ["security"], "schedule": ["at any time"]},
+  "packageRules": [
+    {"matchManagers": ["pip_requirements"], "matchUpdateTypes": ["minor", "patch"], "groupName": "python deps"},
+    {"matchPackageNames": ["tensorflow", "numpy", "scikit-learn"], "groupName": "ml stack", "dependencyDashboardApproval": true},
+    {"matchManagers": ["github-actions", "dockerfile"], "groupName": "ci and base images"}
+  ]
+}

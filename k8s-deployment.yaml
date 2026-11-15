@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ml-api
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-api-config
+data:
+  LOG_LEVEL: "INFO"
+  MAX_BATCH_SIZE: "64"
+  MAX_BODY_BYTES: "1048576"
+  RATE_LIMIT_PER_MIN: "0"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-model-api
+  labels:
+    app: ml-api
+    app.kubernetes.io/name: ml-api
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: mlops-pipeline
+  annotations:
+    kubernetes.io/change-cause: "IMAGE_PLACEHOLDER"
+spec:
+  # replicas intentionally omitted: the HorizontalPodAutoscaler owns the replica count,
+  # so re-applying manifests never resets a scaled-up deployment.
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ml-api
+  template:
+    metadata:
+      labels:
+        app: ml-api
+        app.kubernetes.io/name: ml-api
+    spec:
+      serviceAccountName: ml-api
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: ml-api
+      containers:
+      - name: ml-api
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: IfNotPresent
+        terminationMessagePolicy: FallbackToLogsOnError
+        ports:
+        - name: http
+          containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: ml-api-config
+        env:
+        - name: HOME
+          value: /tmp
+        - name: API_KEY          # optional: create with
+          valueFrom:             # kubectl create secret generic ml-api-secret --from-literal=api-key=...
+            secretKeyRef:
+              name: ml-api-secret
+              key: api-key
+              optional: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        startupProbe:
+          httpGet:
+            path: /health/live
+            port: http
+          periodSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: http
+          periodSeconds: 10
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sleep", "5"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+            ephemeral-storage: "256Mi"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+            ephemeral-storage: "512Mi"
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-api-service
+  labels:
+    app: ml-api
+    app.kubernetes.io/name: ml-api
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  selector:
+    app: ml-api

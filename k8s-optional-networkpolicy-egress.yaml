@@ -1,0 +1,23 @@
+# Optional: deny all outbound traffic from the API pods except DNS.
+# The model is baked into the image, so the service needs no outbound access.
+# Apply per namespace: kubectl apply -n <namespace> -f k8s-optional-networkpolicy-egress.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ml-api-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: ml-api
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP

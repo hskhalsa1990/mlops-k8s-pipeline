@@ -1,0 +1,17 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[lint.isort]
+known-first-party = [
+  "predict", "train", "data_validation", "model_card", "check_docs", "check_metrics", "load_test",
+]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
+
+[lint.per-file-ignores]
+"test_*.py" = ["E501"]
+"conftest.py" = ["E501"]
